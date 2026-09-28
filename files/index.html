@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>선형 회귀와 비선형 회귀</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FAFBF7;
+    --grid: #DFE9EF;
+    --panel: #FFFFFF;
+    --ink: #1E3A5F;
+    --text: #262B30;
+    --muted: #66717C;
+    --pencil: #C4402F;
+    --line: #CBD7DF;
+    --soft: #EEF3F6;
+    --other: #8A97A3;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #151A1F; --grid: #1E252C; --panel: #1A2027; --ink: #9CC3EA;
+      --text: #E3E8ED; --muted: #97A3AE; --pencil: #F07A68; --line: #313B45;
+      --soft: #222A32; --other: #6E7C89;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #151A1F; --grid: #1E252C; --panel: #1A2027; --ink: #9CC3EA;
+    --text: #E3E8ED; --muted: #97A3AE; --pencil: #F07A68; --line: #313B45;
+    --soft: #222A32; --other: #6E7C89;
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0;
+    font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--text);
+    background-color: var(--paper);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 24px 24px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 20px 64px; }
+  header { margin-bottom: 28px; max-width: 68ch; }
+  h1 { font-size: 30px; line-height: 1.25; font-weight: 600; color: var(--ink); margin: 0 0 8px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  h2 { font-size: 17px; font-weight: 600; margin: 0 0 12px; color: var(--ink); }
+  .layout { display: grid; grid-template-columns: 330px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+  section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px; }
+  .stack > * + * { margin-top: 20px; }
+
+  /* data table */
+  .table-scroll { max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; }
+  #dataTable th { position: sticky; top: 0; background: var(--soft); font-weight: 500; font-size: 13px; color: var(--muted); text-align: left; padding: 6px 8px; }
+  #dataTable td { padding: 3px 4px; border-top: 1px solid var(--line); }
+  #dataTable td.idx { width: 32px; text-align: right; color: var(--muted); font-size: 12px; padding-right: 8px; }
+  #dataTable td.del { width: 34px; }
+  input[type="number"], select, textarea {
+    font: inherit; color: var(--text); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; width: 100%;
+  }
+  input[type="number"] { font-variant-numeric: tabular-nums; }
+  input.bad { border-color: var(--pencil); }
+  textarea { min-height: 96px; resize: vertical; font-size: 14px; }
+  button {
+    font: inherit; font-size: 14px; cursor: pointer; border-radius: 4px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 6px 12px;
+  }
+  button:hover { background: var(--soft); }
+  button.primary { background: var(--ink); border-color: var(--ink); color: var(--panel); }
+  button.primary:hover { opacity: 0.9; }
+  button.icon { border: none; background: none; color: var(--muted); padding: 4px 8px; font-size: 16px; line-height: 1; }
+  button.icon:hover { color: var(--pencil); }
+  :focus-visible { outline: 2px solid var(--pencil); outline-offset: 2px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+  details summary { cursor: pointer; font-weight: 500; color: var(--ink); }
+  details[open] summary { margin-bottom: 8px; }
+
+  /* model picker */
+  .picker { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; width: fit-content; max-width: 100%; }
+  .picker button { border: none; border-radius: 0; border-right: 1px solid var(--line); padding: 8px 14px; }
+  .picker button:last-child { border-right: none; }
+  .picker button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+  .degree { display: inline-flex; align-items: center; gap: 8px; margin-left: 12px; font-size: 14px; }
+  .degree select { width: auto; }
+  .model-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+  /* result */
+  .equation { font-size: 24px; color: var(--pencil); font-weight: 500; margin: 14px 0 12px; overflow-x: auto; white-space: nowrap; font-family: "Cambria Math", "STIX Two Math", "Times New Roman", serif; font-style: italic; }
+  .equation sup { font-size: 0.62em; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0; border-top: 1px solid var(--line); }
+  .metric { padding: 10px 12px 4px 0; }
+  .metric .v { font-size: 20px; font-weight: 500; color: var(--text); }
+  .metric .k { font-size: 13px; color: var(--muted); }
+  .warn { color: var(--pencil); font-size: 14px; margin: 10px 0 0; }
+
+  /* chart */
+  .chart-box { width: 100%; overflow-x: auto; }
+  svg { display: block; width: 100%; height: auto; min-width: 420px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--muted); margin-top: 6px; align-items: center; }
+  .legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+  .legend b { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); margin-right: 6px; vertical-align: middle; }
+  label.check { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+
+  /* compare table */
+  .compare-scroll { overflow-x: auto; }
+  #compare { font-size: 14px; }
+  #compare th { text-align: left; font-weight: 500; color: var(--muted); font-size: 13px; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  #compare td { padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  #compare td.eq { font-family: "Cambria Math", "Times New Roman", serif; font-style: italic; }
+  #compare tr.sel td { background: var(--soft); }
+  #compare tbody tr { cursor: pointer; }
+  #compare tbody tr:hover td { background: var(--soft); }
+  .best { color: var(--pencil); font-size: 12px; margin-left: 6px; font-style: normal; }
+  .num { text-align: right; }
+
+  .predict { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .predict input { width: 140px; }
+  .predict output { font-size: 18px; color: var(--pencil); font-weight: 500; }
+  .steps { font-size: 14px; }
+  .steps td { padding: 3px 12px 3px 0; }
+  .steps td:first-child { color: var(--muted); }
+  .intro { margin-top: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; }
+  .intro-body p { margin: 0 0 10px; color: var(--text); }
+  .intro-body p.hint { color: var(--muted); margin: 0; }
+  .hint.top { margin: -4px 0 10px; }
+  .model-desc { margin-top: 12px; padding: 10px 14px; background: var(--soft); border-radius: 4px; font-size: 14px; }
+  .model-desc strong { color: var(--ink); }
+  .eq-note { margin: -6px 0 12px; }
+  .metric .d { font-size: 12px; color: var(--muted); line-height: 1.45; }
+  .verdict { margin: 0 0 12px; font-size: 15px; }
+  .verdict strong { color: var(--pencil); }
+  .steps td:last-child { color: var(--muted); font-size: 13px; }
+  footer { margin-top: 32px; font-size: 13px; color: var(--muted); max-width: 72ch; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>선형 회귀와 비선형 회귀</h1>
+    <p>점들을 입력하면, 그 점들을 <strong>가장 잘 따라가는 선</strong>을 찾아 줍니다. 값을 바꾸면 결과가 바로 다시 계산됩니다.</p>
+    <details class="intro">
+      <summary>처음 사용하는 분을 위한 설명</summary>
+      <div class="intro-body">
+        <p><strong>회귀</strong>는 흩어진 점들 사이로 선 하나를 긋는 것입니다. 예를 들어 공부 시간(x)과 시험 점수(y)를 점으로 찍고 선을 그으면, "1시간 더 공부하면 몇 점 오를까?"나 "7시간 공부하면 몇 점일까?"를 알 수 있습니다.</p>
+        <p><strong>가장 좋은 선</strong>은 각 점에서 선까지의 거리(오차)가 전체적으로 가장 작은 선입니다. 이렇게 고르는 방법을 <strong>최소제곱법</strong>이라고 합니다.</p>
+        <p><strong>선형 회귀</strong>는 곧은 직선을, <strong>비선형 회귀</strong>는 휘어진 곡선을 긋는 방법입니다.</p>
+        <p class="hint">사용 순서: ① 왼쪽 표에 x, y 입력 → ② 위쪽 버튼에서 선의 종류 선택 → ③ 식과 그래프 확인 → ④ 아래 표에서 어떤 선이 가장 잘 맞는지 비교</p>
+      </div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <!-- 데이터 입력 -->
+    <div class="stack">
+      <section class="panel">
+        <h2>데이터 입력</h2>
+        <p class="hint top">x와 y를 한 쌍씩 입력합니다. 마지막 칸에서 Enter를 누르면 새 줄이 생깁니다.</p>
+        <div class="table-scroll">
+          <table id="dataTable">
+            <thead><tr><th></th><th>x</th><th>y</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="row">
+          <button class="primary" id="addRow">행 추가</button>
+          <button id="loadSample">예시 데이터</button>
+          <button id="clearAll">모두 지우기</button>
+        </div>
+        <p class="hint" id="countHint"></p>
+      </section>
+
+      <section class="panel">
+        <details>
+          <summary>여러 값 한 번에 붙여넣기</summary>
+          <textarea id="bulk" placeholder="한 줄에 x, y 한 쌍씩&#10;1, 2.1&#10;2, 3.9&#10;3, 8.2" aria-label="x, y 데이터 붙여넣기"></textarea>
+          <p class="hint">쉼표, 띄어쓰기, 탭 중 무엇으로 구분해도 됩니다. 엑셀에서 두 열을 복사해 그대로 붙여넣어도 됩니다.</p>
+          <div class="row">
+            <button class="primary" id="applyBulk">표에 적용</button>
+          </div>
+        </details>
+      </section>
+    </div>
+
+    <!-- 결과 -->
+    <div class="stack">
+      <section class="panel">
+        <h2>선의 종류 고르기</h2>
+        <div class="model-bar">
+          <div class="picker" role="group" aria-label="회귀 모델 선택" id="picker"></div>
+          <label class="degree" id="degreeWrap">차수
+            <select id="degree">
+              <option>2</option><option>3</option><option>4</option><option>5</option><option>6</option>
+            </select>
+          </label>
+        </div>
+        <div class="model-desc" id="modelDesc"></div>
+        <div class="equation" id="equation"></div>
+        <p class="hint eq-note">ŷ(와이 햇)은 선으로 계산한 <strong>예측값</strong>이라는 뜻입니다.</p>
+        <div class="metrics" id="metrics"></div>
+        <p class="warn" id="warn" hidden></p>
+      </section>
+
+      <section class="panel">
+        <h2>그래프</h2>
+        <div class="chart-box" id="chart"></div>
+        <div class="legend">
+          <span><b></b>입력한 점</span>
+          <span><i style="border-color: var(--pencil)"></i>선택한 선</span>
+          <label class="check"><input type="checkbox" id="showAll"> 다른 선도 함께 보기</label>
+        </div>
+        <p class="hint">빨간 선이 파란 점들 가까이 지나갈수록 잘 맞는 선입니다. 숫자만 보지 말고 그래프 모양도 꼭 함께 확인해야 합니다.</p>
+      </section>
+
+      <section class="panel">
+        <h2>예측하기</h2>
+        <p class="hint top">x 값을 넣으면, 빨간 선을 따라갔을 때의 y 값을 알려 줍니다.</p>
+        <div class="predict">
+          <label for="px">x =</label>
+          <input type="number" step="any" id="px" value="10" inputmode="decimal">
+          <span>일 때 ŷ =</span>
+          <output id="py">–</output>
+        </div>
+        <p class="warn" id="predictWarn" hidden></p>
+      </section>
+
+      <section class="panel">
+        <h2>어떤 선이 가장 잘 맞을까?</h2>
+        <p class="verdict" id="verdict"></p>
+        <div class="compare-scroll">
+          <table id="compare">
+            <thead><tr><th>선의 종류</th><th>식</th><th class="num">R²</th><th class="num">수정 R²</th><th class="num">RMSE</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="hint">행을 누르면 그 선이 선택됩니다. 여러 선을 비교할 때는 <strong>수정 R²</strong>를 기준으로 합니다. 복잡한 선일수록 R²가 저절로 높아지는데, 수정 R²는 그만큼 감점을 해서 공정하게 비교해 줍니다.</p>
+      </section>
+
+      <section class="panel" id="stepsPanel">
+        <details>
+          <summary>직선(선형 회귀)은 이렇게 계산합니다</summary>
+          <div id="steps" class="steps"></div>
+        </details>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    지수와 거듭제곱은 로그를 이용해 직선 문제로 바꿔서 계산합니다. 로그는 0보다 큰 수에만 쓸 수 있어서, 지수는 y가, 로그는 x가, 거듭제곱은 x와 y 모두 0보다 커야 계산됩니다.
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const SAMPLE = [[1, 2.1], [2, 3.9], [3, 8.2], [4, 15.8], [5, 24.6], [6, 37.1], [7, 49.5], [8, 64.9]];
+  let rows = SAMPLE.map(r => r.map(String));
+  let selected = "linear";
+  let degree = 2;
+
+  const $ = s => document.querySelector(s);
+
+  /* ---------- 수치 계산 ---------- */
+
+  // 가우스 소거법(부분 피벗)으로 A·c = b 풀기
+  function solve(A, b) {
+    const n = b.length;
+    const M = A.map((row, i) => row.concat([b[i]]));
+    for (let col = 0; col < n; col++) {
+      let piv = col;
+      for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+      if (Math.abs(M[piv][col]) < 1e-12) return null;
+      [M[col], M[piv]] = [M[piv], M[col]];
+      for (let r = col + 1; r < n; r++) {
+        const f = M[r][col] / M[col][col];
+        for (let c = col; c <= n; c++) M[r][c] -= f * M[col][c];
+      }
+    }
+    const x = new Array(n).fill(0);
+    for (let r = n - 1; r >= 0; r--) {
+      let s = M[r][n];
+      for (let c = r + 1; c < n; c++) s -= M[r][c] * x[c];
+      x[r] = s / M[r][r];
+    }
+    return x;
+  }
+
+  // 다항 최소제곱: 정규방정식 (XᵀX)c = Xᵀy
+  // 수치 안정성을 위해 x를 최댓값으로 나눠 스케일링한 뒤 계수를 원래 단위로 되돌림
+  function polyFit(xs, ys, deg) {
+    const s = Math.max(...xs.map(Math.abs)) || 1;
+    const m = deg + 1;
+    const A = Array.from({ length: m }, () => new Array(m).fill(0));
+    const b = new Array(m).fill(0);
+    for (let i = 0; i < xs.length; i++) {
+      const u = xs[i] / s;
+      const pw = [1];
+      for (let k = 1; k <= 2 * deg; k++) pw[k] = pw[k - 1] * u;
+      for (let r = 0; r < m; r++) {
+        for (let c = 0; c < m; c++) A[r][c] += pw[r + c];
+        b[r] += pw[r] * ys[i];
+      }
+    }
+    const c = solve(A, b);
+    if (!c) return null;
+    return c.map((ck, k) => ck / Math.pow(s, k));
+  }
+
+  /* ---------- 표기 ---------- */
+
+  function fmt(v, p = 4) {
+    if (!isFinite(v)) return "–";
+    if (v === 0) return "0";
+    const a = Math.abs(v);
+    if (a >= 1e6 || a < 1e-4) {
+      const [m, e] = v.toExponential(p - 1).split("e");
+      return `${parseFloat(m)}×10<sup>${parseInt(e, 10)}</sup>`;
+    }
+    return String(parseFloat(v.toPrecision(p)));
+  }
+  const plain = v => fmt(v).replace(/<sup>(.*?)<\/sup>/, "^$1");
+
+  function polyEq(c) {
+    let out = "";
+    for (let k = c.length - 1; k >= 0; k--) {
+      const v = c[k];
+      const term = k === 0 ? "" : k === 1 ? "x" : `x<sup>${k}</sup>`;
+      if (out === "") out += (v < 0 ? "−" : "") + fmt(Math.abs(v)) + term;
+      else out += (v < 0 ? " − " : " + ") + fmt(Math.abs(v)) + term;
+    }
+    return "ŷ = " + out;
+  }
+  const signed = v => (v < 0 ? " − " : " + ") + fmt(Math.abs(v));
+
+  /* ---------- 모델 정의 ---------- */
+
+  const MODELS = {
+    linear: {
+      name: "선형", params: () => 2,
+      fit(xs, ys) {
+        const c = polyFit(xs, ys, 1);
+        if (!c) return { error: "x 값이 모두 같으면 기울기를 구할 수 없습니다." };
+        return { f: x => c[0] + c[1] * x, eq: polyEq(c) };
+      }
+    },
+    poly: {
+      name: () => `다항식 (${degree}차)`, params: () => degree + 1,
+      fit(xs, ys) {
+        const c = polyFit(xs, ys, degree);
+        if (!c) return { error: `서로 다른 x 값이 ${degree + 1}개 이상 필요합니다.` };
+        return { f: x => c.reduce((s, ck, k) => s + ck * Math.pow(x, k), 0), eq: polyEq(c) };
+      }
+    },
+    exp: {
+      name: "지수", params: () => 2,
+      fit(xs, ys) {
+        if (ys.some(y => y <= 0)) return { error: "지수 모델은 모든 y 값이 0보다 커야 합니다." };
+        const c = polyFit(xs, ys.map(Math.log), 1);
+        if (!c) return { error: "x 값이 모두 같으면 계산할 수 없습니다." };
+        const a = Math.exp(c[0]), b = c[1];
+        return { f: x => a * Math.exp(b * x), eq: `ŷ = ${fmt(a)}·e<sup>${plain(b)}x</sup>` };
+      }
+    },
+    log: {
+      name: "로그", params: () => 2,
+      fit(xs, ys) {
+        if (xs.some(x => x <= 0)) return { error: "로그 모델은 모든 x 값이 0보다 커야 합니다." };
+        const c = polyFit(xs.map(Math.log), ys, 1);
+        if (!c) return { error: "x 값이 모두 같으면 계산할 수 없습니다." };
+        return { f: x => (x > 0 ? c[0] + c[1] * Math.log(x) : NaN), eq: `ŷ = ${fmt(c[1])}·ln x${signed(c[0])}`, domainPos: true };
+      }
+    },
+    power: {
+      name: "거듭제곱", params: () => 2,
+      fit(xs, ys) {
+        if (xs.some(x => x <= 0) || ys.some(y => y <= 0)) return { error: "거듭제곱 모델은 모든 x, y 값이 0보다 커야 합니다." };
+        const c = polyFit(xs.map(Math.log), ys.map(Math.log), 1);
+        if (!c) return { error: "x 값이 모두 같으면 계산할 수 없습니다." };
+        const a = Math.exp(c[0]), b = c[1];
+        return { f: x => (x > 0 ? a * Math.pow(x, b) : NaN), eq: `ŷ = ${fmt(a)}·x<sup>${plain(b)}</sup>`, domainPos: true };
+      }
+    }
+  };
+  const ORDER = ["linear", "poly", "exp", "log", "power"];
+  const modelName = k => (typeof MODELS[k].name === "function" ? MODELS[k].name() : MODELS[k].name);
+
+  function evaluate(key, xs, ys) {
+    const n = xs.length, p = MODELS[key].params();
+    if (n < p) return { error: `데이터가 최소 ${p}개 필요합니다.` };
+    const r = MODELS[key].fit(xs, ys);
+    if (r.error) return r;
+    const yBar = ys.reduce((a, b) => a + b, 0) / n;
+    let sse = 0, sst = 0;
+    for (let i = 0; i < n; i++) {
+      sse += (ys[i] - r.f(xs[i])) ** 2;
+      sst += (ys[i] - yBar) ** 2;
+    }
+    r.r2 = sst > 0 ? 1 - sse / sst : NaN;
+    r.adj = n > p && sst > 0 ? 1 - (1 - r.r2) * (n - 1) / (n - p) : NaN;
+    r.rmse = Math.sqrt(sse / n);
+    r.n = n;
+    return r;
+  }
+
+  /* ---------- 데이터 ---------- */
+
+  function getData() {
+    const xs = [], ys = [];
+    rows.forEach(([x, y]) => {
+      const a = parseFloat(x), b = parseFloat(y);
+      if (isFinite(a) && isFinite(b)) { xs.push(a); ys.push(b); }
+    });
+    return { xs, ys };
+  }
+
+  function renderTable() {
+    const tb = $("#dataTable tbody");
+    tb.innerHTML = "";
+    rows.forEach((r, i) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td class="idx">${i + 1}</td>
+        <td><input type="number" step="any" inputmode="decimal" aria-label="${i + 1}번째 x" value="${r[0]}"></td>
+        <td><input type="number" step="any" inputmode="decimal" aria-label="${i + 1}번째 y" value="${r[1]}"></td>
+        <td class="del"><button class="icon" aria-label="${i + 1}번째 행 삭제" title="행 삭제">×</button></td>`;
+      const [ix, iy] = tr.querySelectorAll("input");
+      ix.addEventListener("input", () => { rows[i][0] = ix.value; update(); });
+      iy.addEventListener("input", () => { rows[i][1] = iy.value; update(); });
+      [ix, iy].forEach(inp => inp.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (i === rows.length - 1) { addRow(); }
+          else tb.children[i + 1].querySelector("input").focus();
+        }
+      }));
+      tr.querySelector("button").addEventListener("click", () => { rows.splice(i, 1); renderTable(); update(); });
+      tb.appendChild(tr);
+    });
+  }
+
+  function addRow() {
+    rows.push(["", ""]);
+    renderTable();
+    update();
+    const last = $("#dataTable tbody").lastElementChild;
+    if (last) last.querySelector("input").focus();
+  }
+
+  /* ---------- 그래프 (SVG) ---------- */
+
+  function niceTicks(a, b, n) {
+    const span = b - a;
+    let step = Math.pow(10, Math.floor(Math.log10(span / n)));
+    const err = span / n / step;
+    if (err >= 7.5) step *= 10; else if (err >= 3.5) step *= 5; else if (err >= 1.5) step *= 2;
+    const dec = Math.max(0, -Math.floor(Math.log10(step)));
+    const out = [];
+    for (let v = Math.ceil(a / step) * step; v <= b + step * 1e-9; v += step) out.push(Number(v.toFixed(dec)));
+    return out;
+  }
+
+  function drawChart(xs, ys, results) {
+    const W = 640, H = 400, m = { l: 58, r: 18, t: 16, b: 44 };
+    const box = $("#chart");
+    if (xs.length === 0) {
+      box.innerHTML = `<p class="hint" style="padding:40px 0;text-align:center">데이터를 입력하면 그래프가 그려집니다.</p>`;
+      return;
+    }
+    let x0 = Math.min(...xs), x1 = Math.max(...xs);
+    let y0 = Math.min(...ys), y1 = Math.max(...ys);
+    if (x0 === x1) { x0 -= 1; x1 += 1; }
+    if (y0 === y1) { y0 -= 1; y1 += 1; }
+    const px = (x1 - x0) * 0.08, py = (y1 - y0) * 0.15;
+    x0 -= px; x1 += px; y0 -= py; y1 += py;
+
+    const sx = x => m.l + (x - x0) / (x1 - x0) * (W - m.l - m.r);
+    const sy = y => H - m.b - (y - y0) / (y1 - y0) * (H - m.t - m.b);
+
+    let g = "";
+    niceTicks(x0, x1, 7).forEach(t => {
+      g += `<line x1="${sx(t)}" x2="${sx(t)}" y1="${m.t}" y2="${H - m.b}" stroke="var(--grid)"/>`;
+      g += `<text x="${sx(t)}" y="${H - m.b + 18}" text-anchor="middle" font-size="12" fill="var(--muted)">${t}</text>`;
+    });
+    niceTicks(y0, y1, 6).forEach(t => {
+      g += `<line x1="${m.l}" x2="${W - m.r}" y1="${sy(t)}" y2="${sy(t)}" stroke="var(--grid)"/>`;
+      g += `<text x="${m.l - 8}" y="${sy(t) + 4}" text-anchor="end" font-size="12" fill="var(--muted)">${t}</text>`;
+    });
+    if (y0 < 0 && y1 > 0) g += `<line x1="${m.l}" x2="${W - m.r}" y1="${sy(0)}" y2="${sy(0)}" stroke="var(--muted)" stroke-width="1"/>`;
+    if (x0 < 0 && x1 > 0) g += `<line x1="${sx(0)}" x2="${sx(0)}" y1="${m.t}" y2="${H - m.b}" stroke="var(--muted)" stroke-width="1"/>`;
+
+    const curve = r => {
+      let d = "", pen = false;
+      const N = 300;
+      for (let i = 0; i <= N; i++) {
+        const x = x0 + (x1 - x0) * i / N;
+        const y = r.f(x);
+        if (!isFinite(y) || Math.abs(y - y0) > (y1 - y0) * 20) { pen = false; continue; }
+        d += (pen ? "L" : "M") + sx(x).toFixed(2) + " " + sy(y).toFixed(2);
+        pen = true;
+      }
+      return d;
+    };
+
+    let curves = "";
+    if ($("#showAll").checked) {
+      ORDER.forEach(k => {
+        if (k !== selected && results[k] && !results[k].error)
+          curves += `<path d="${curve(results[k])}" fill="none" stroke="var(--other)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+      });
+    }
+    const sel = results[selected];
+    if (sel && !sel.error) curves += `<path d="${curve(sel)}" fill="none" stroke="var(--pencil)" stroke-width="2.5"/>`;
+
+    const pts = xs.map((x, i) => `<circle cx="${sx(x)}" cy="${sy(ys[i])}" r="4.5" fill="var(--ink)" stroke="var(--panel)" stroke-width="1.5"><title>(${x}, ${ys[i]})</title></circle>`).join("");
+
+    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="데이터 산점도와 회귀 곡선">
+      <defs><clipPath id="plot"><rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}"/></clipPath></defs>
+      ${g}
+      <rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="none" stroke="var(--line)"/>
+      <g clip-path="url(#plot)">${curves}</g>
+      ${pts}
+      <text x="${(W + m.l) / 2}" y="${H - 6}" text-anchor="middle" font-size="13" fill="var(--text)" font-style="italic">x</text>
+      <text x="14" y="${(H - m.b + m.t) / 2}" text-anchor="middle" font-size="13" fill="var(--text)" font-style="italic" transform="rotate(-90 14 ${(H - m.b + m.t) / 2})">y</text>
+    </svg>`;
+  }
+
+  /* ---------- 화면 갱신 ---------- */
+
+  function renderPicker() {
+    const p = $("#picker");
+    p.innerHTML = "";
+    ORDER.forEach(k => {
+      const b = document.createElement("button");
+      b.textContent = k === "poly" ? "다항식" : MODELS[k].name;
+      b.setAttribute("aria-pressed", String(k === selected));
+      b.addEventListener("click", () => { selected = k; renderPicker(); update(); });
+      p.appendChild(b);
+    });
+    $("#degreeWrap").style.display = selected === "poly" ? "" : "none";
+    $("#modelDesc").innerHTML = DESC[selected];
+  }
+
+  // 선의 종류별 쉬운 설명
+  const DESC = {
+    linear: "<strong>곧은 직선</strong>입니다. 일정하게 늘거나 줄어드는 데이터에 사용합니다. 예: 택시 요금(기본요금 + 거리만큼 요금)<br>식에서 x 앞의 숫자는 <strong>기울기</strong>(x가 1 늘 때 y가 얼마나 느는지), 뒤의 숫자는 <strong>절편</strong>(x가 0일 때 y 값)입니다.",
+    poly: "<strong>휘어지는 곡선</strong>입니다. 2차는 포물선(∪ 또는 ∩) 모양입니다. 예: 던진 공의 높이(올라갔다가 내려옴)<br>차수를 너무 높이면 선이 점을 억지로 다 지나가려고 구불구불해져서, 새로운 값은 오히려 잘 못 맞힙니다.",
+    exp: "<strong>점점 폭발적으로 늘어나는 곡선</strong>입니다. 몇 배씩 불어나는 데이터에 사용합니다. 예: 세균 수(1 → 2 → 4 → 8 → 16)<br>y가 모두 0보다 커야 계산됩니다.",
+    log: "<strong>처음엔 빠르게, 나중엔 천천히 느는 곡선</strong>입니다. 예: 운동 실력(처음엔 쑥쑥 늘다가 나중엔 조금씩 늚)<br>x가 모두 0보다 커야 계산됩니다.",
+    power: "<strong>x의 몇 제곱에 비례하는 곡선</strong>입니다. 예: 정사각형의 넓이는 한 변 길이의 2제곱에 비례합니다.<br>x와 y가 모두 0보다 커야 계산됩니다."
+  };
+
+  function linearSteps(xs, ys) {
+    const n = xs.length;
+    if (n < 2) return `<p class="hint">점이 2개 이상 있어야 직선을 그을 수 있습니다.</p>`;
+    const xb = xs.reduce((a, b) => a + b, 0) / n;
+    const yb = ys.reduce((a, b) => a + b, 0) / n;
+    let sxx = 0, sxy = 0;
+    for (let i = 0; i < n; i++) { sxx += (xs[i] - xb) ** 2; sxy += (xs[i] - xb) * (ys[i] - yb); }
+    if (sxx === 0) return `<p class="hint">x 값이 모두 같으면 기울기를 구할 수 없습니다.</p>`;
+    const b1 = sxy / sxx, b0 = yb - b1 * xb;
+    return `<p class="hint top" style="margin-top:0">직선은 아래 순서로 구합니다. 오른쪽에 쉬운 설명을 붙였습니다.</p>
+    <div class="compare-scroll"><table><tbody>
+      <tr><td>① 점의 개수 n</td><td>${n}</td><td>입력한 점이 몇 개인지</td></tr>
+      <tr><td>② x의 평균 x̄</td><td>${fmt(xb, 6)}</td><td>x 값들을 모두 더해 n으로 나눈 값</td></tr>
+      <tr><td>③ y의 평균 ȳ</td><td>${fmt(yb, 6)}</td><td>y 값들을 모두 더해 n으로 나눈 값</td></tr>
+      <tr><td>④ S<sub>xx</sub> = Σ(x − x̄)²</td><td>${fmt(sxx, 6)}</td><td>x가 평균에서 얼마나 흩어져 있는지</td></tr>
+      <tr><td>⑤ S<sub>xy</sub> = Σ(x − x̄)(y − ȳ)</td><td>${fmt(sxy, 6)}</td><td>x와 y가 얼마나 같이 움직이는지 (양수면 같이 커짐)</td></tr>
+      <tr><td>⑥ 기울기 = S<sub>xy</sub> ÷ S<sub>xx</sub></td><td>${fmt(b1, 6)}</td><td>x가 1 늘 때 y가 얼마나 느는지</td></tr>
+      <tr><td>⑦ 절편 = ȳ − 기울기 × x̄</td><td>${fmt(b0, 6)}</td><td>x가 0일 때 y 값. 직선은 항상 평균점 (x̄, ȳ)을 지납니다</td></tr>
+    </tbody></table></div>
+    <p class="hint">결과: ŷ = ${fmt(b1, 6)}x ${b0 < 0 ? "−" : "+"} ${fmt(Math.abs(b0), 6)}</p>`;
+  }
+
+  function update() {
+    // 입력칸 오류 표시
+    document.querySelectorAll("#dataTable input").forEach(inp => {
+      inp.classList.toggle("bad", inp.value.trim() !== "" && !isFinite(parseFloat(inp.value)));
+    });
+
+    const { xs, ys } = getData();
+    $("#countHint").textContent = `계산에 쓴 점: ${xs.length}개 (x와 y가 모두 입력된 줄만 사용합니다)`;
+
+    const results = {};
+    ORDER.forEach(k => { results[k] = xs.length ? evaluate(k, xs, ys) : { error: "데이터를 입력해 주십시오." }; });
+    const r = results[selected];
+
+    const warn = $("#warn");
+    if (r.error) {
+      $("#equation").innerHTML = "";
+      $("#metrics").innerHTML = "";
+      warn.textContent = r.error;
+      warn.hidden = false;
+    } else {
+      warn.hidden = true;
+      $("#equation").innerHTML = r.eq;
+      $("#metrics").innerHTML = [
+        ["R²", fmt(r.r2), "선이 점들을 얼마나 잘 설명하는지. 1에 가까울수록 좋습니다."],
+        ["수정 R²", fmt(r.adj), "R²에서 복잡한 선에 감점을 한 값. 1에 가까울수록 좋습니다."],
+        ["RMSE", fmt(r.rmse), "예측이 평균적으로 빗나가는 정도. 0에 가까울수록 좋습니다."],
+        ["데이터 수", r.n, "계산에 쓴 점의 개수입니다."]
+      ].map(([k, v, d]) => `<div class="metric"><div class="v">${v}</div><div class="k">${k}</div><div class="d">${d}</div></div>`).join("");
+    }
+
+    // 예측
+    const pxv = parseFloat($("#px").value);
+    $("#py").innerHTML = !r.error && isFinite(pxv) && isFinite(r.f(pxv)) ? fmt(r.f(pxv), 6) : "–";
+    const pw = $("#predictWarn");
+    if (xs.length && isFinite(pxv) && (pxv < Math.min(...xs) || pxv > Math.max(...xs))) {
+      pw.textContent = `입력한 x의 범위(${Math.min(...xs)} ~ ${Math.max(...xs)})를 벗어난 값입니다. 범위 밖의 예측은 크게 틀릴 수 있습니다.`;
+      pw.hidden = false;
+    } else pw.hidden = true;
+
+    // 비교 표
+    let bestKey = null, bestVal = -Infinity;
+    ORDER.forEach(k => { const v = results[k]; if (!v.error && isFinite(v.adj) && v.adj > bestVal) { bestVal = v.adj; bestKey = k; } });
+    const names = { linear: "직선(선형)", poly: `${degree}차 다항식`, exp: "지수", log: "로그", power: "거듭제곱" };
+    $("#verdict").innerHTML = bestKey
+      ? `이 데이터에는 <strong>${names[bestKey]}</strong> 선이 가장 잘 맞습니다. (수정 R² ${fmt(bestVal)})`
+      : "데이터를 입력하면 어떤 선이 가장 잘 맞는지 알려 드립니다.";
+    const tb = $("#compare tbody");
+    tb.innerHTML = "";
+    ORDER.forEach(k => {
+      const v = results[k];
+      const tr = document.createElement("tr");
+      if (k === selected) tr.className = "sel";
+      tr.tabIndex = 0;
+      tr.innerHTML = v.error
+        ? `<td>${modelName(k)}</td><td colspan="4" style="color:var(--muted)">${v.error}</td>`
+        : `<td>${modelName(k)}${k === bestKey ? '<span class="best">가장 잘 맞음</span>' : ""}</td>
+           <td class="eq">${v.eq}</td><td class="num">${fmt(v.r2)}</td><td class="num">${fmt(v.adj)}</td><td class="num">${fmt(v.rmse)}</td>`;
+      const pick = () => { selected = k; renderPicker(); update(); };
+      tr.addEventListener("click", pick);
+      tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+      tb.appendChild(tr);
+    });
+
+    $("#steps").innerHTML = linearSteps(xs, ys);
+    drawChart(xs, ys, results);
+  }
+
+  /* ---------- 이벤트 ---------- */
+
+  $("#addRow").addEventListener("click", addRow);
+  $("#loadSample").addEventListener("click", () => { rows = SAMPLE.map(r => r.map(String)); renderTable(); update(); });
+  $("#clearAll").addEventListener("click", () => { rows = [["", ""]]; renderTable(); update(); });
+  $("#degree").addEventListener("change", e => { degree = parseInt(e.target.value, 10); update(); });
+  $("#px").addEventListener("input", update);
+  $("#showAll").addEventListener("change", update);
+  $("#applyBulk").addEventListener("click", () => {
+    const parsed = $("#bulk").value.split(/\r?\n/)
+      .map(line => line.trim().split(/[\s,;]+/))
+      .filter(p => p.length >= 2 && isFinite(parseFloat(p[0])) && isFinite(parseFloat(p[1])))
+      .map(p => [p[0], p[1]]);
+    if (parsed.length === 0) { alert("읽을 수 있는 값이 없습니다. 한 줄에 숫자 두 개씩(x, y) 입력해 주십시오."); return; }
+    rows = parsed;
+    renderTable();
+    update();
+  });
+
+  renderPicker();
+  renderTable();
+  update();
+})();
+</script>
+</body>
+</html>
